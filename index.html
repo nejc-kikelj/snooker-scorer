@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Snooker Scorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column scoreboard on top, ball pad under it, sheets for fouls. Baize green + brass, ball colours are literal because they are the subject. */
+:root{
+  --bg:#edf0ea; --surface:#ffffff; --surface2:#e3e9e1; --ink:#14201a; --muted:#566559;
+  --line:#c8d2c8; --baize:#1d5a3c; --baize-ink:#f2f7f3; --brass:#9a6f12; --brass-soft:#f0e3c0;
+  --bad:#b3261e; --good:#1d7a45;
+  --f-num:'Barlow Condensed','Arial Narrow',sans-serif; --f-body:'Barlow',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1913; --surface:#16251d; --surface2:#1e3228; --ink:#e5eee7; --muted:#97a99b;
+  --line:#2c4336; --baize:#2c7a54; --baize-ink:#f2f7f3; --brass:#dcb04e; --brass-soft:#3a3016;
+  --bad:#ff8a80; --good:#6fd39a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1913; --surface:#16251d; --surface2:#1e3228; --ink:#e5eee7; --muted:#97a99b;
+  --line:#2c4336; --baize:#2c7a54; --baize-ink:#f2f7f3; --brass:#dcb04e; --brass-soft:#3a3016;
+  --bad:#ff8a80; --good:#6fd39a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.4;
+  padding-block:0 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:760px;margin:0 auto}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+h1,h2,h3{margin:0;font-family:var(--f-num);font-weight:600;letter-spacing:.02em}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px 8px;flex-wrap:wrap}
+.top h1{font-size:1.6rem;text-transform:uppercase;letter-spacing:.08em}
+.sync{font-size:.78rem;color:var(--muted);flex-basis:100%}
+.theme{display:flex;gap:2px;background:var(--surface2);padding:3px;border-radius:9px}
+.theme button{border:0;background:none;padding:6px 11px;border-radius:6px;font-family:var(--f-num);font-weight:600;font-size:.95rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);min-height:34px}
+.theme button[aria-pressed=true]{background:var(--baize);color:var(--baize-ink)}
+.tabs{display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:10px;margin-bottom:14px}
+.tabs button{flex:1;border:0;background:none;padding:9px 6px;border-radius:7px;font-family:var(--f-num);font-weight:600;font-size:1.05rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tabs button[aria-selected=true]{background:var(--baize);color:var(--baize-ink)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.muted{color:var(--muted)}
+.lbl{font-family:var(--f-num);text-transform:uppercase;letter-spacing:.1em;font-size:.82rem;color:var(--muted);font-weight:600}
+.btn{border:1px solid var(--line);background:var(--surface);padding:11px 14px;border-radius:9px;font-weight:600;min-height:44px}
+.btn.primary{background:var(--baize);color:var(--baize-ink);border-color:var(--baize)}
+.btn.warn{color:var(--bad);border-color:var(--bad)}
+.btn.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.btn.grow{flex:1}
+input[type=text],select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:10px 12px;min-height:44px;width:100%}
+
+/* scoreboard */
+.board{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pl{background:var(--baize);color:var(--baize-ink);border-radius:12px;padding:12px 14px;border:3px solid transparent;min-width:0}
+.pl.turn{border-color:var(--brass);box-shadow:0 0 0 2px var(--brass-soft) inset}
+.pl .nm{font-family:var(--f-num);font-weight:600;font-size:1.2rem;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;justify-content:space-between;gap:6px}
+.pl .sc{font-family:var(--f-num);font-weight:700;font-size:4.2rem;line-height:1;font-variant-numeric:tabular-nums}
+.pl .sub{font-size:.82rem;opacity:.85;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.pips{display:flex;gap:4px;align-items:center}
+.pip{width:10px;height:10px;border-radius:50%;border:2px solid currentColor;opacity:.8}
+.pip.on{background:var(--brass);border-color:var(--brass);opacity:1}
+.turnflag{font-family:var(--f-num);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:#ffe3a0;background:#000a;border-radius:5px;padding:1px 6px}
+.info{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.info .cell{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
+.info .big{font-family:var(--f-num);font-weight:700;font-size:2.3rem;line-height:1;font-variant-numeric:tabular-nums}
+.reddots{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+.rd{width:11px;height:11px;border-radius:50%;background:#c4262e}
+.rd.gone{background:transparent;border:1.5px solid var(--line)}
+.alert{margin-top:10px;background:var(--brass-soft);border:1px solid var(--brass);border-radius:10px;padding:8px 12px;font-size:.92rem}
+
+/* balls */
+.onrow{display:flex;align-items:baseline;gap:10px;margin:14px 0 8px;flex-wrap:wrap}
+.onrow b{font-family:var(--f-num);font-size:1.5rem;text-transform:uppercase;letter-spacing:.05em}
+.pad{display:flex;justify-content:space-between;gap:6px}
+.ball{--c:#888;flex:1 1 0;max-width:68px;min-width:0;aspect-ratio:1;border-radius:50%;border:1px solid #0004;
+  background:radial-gradient(circle at 34% 28%,#fffa 0 7%,#fff0 26%),var(--c);
+  box-shadow:inset -5px -7px 12px #0006,0 2px 5px #0005;color:#fff;font-family:var(--f-num);font-weight:700;font-size:1.35rem;
+  display:grid;place-items:center;padding:0}
+.ball.dark{color:#161616}
+.ball:active:not([disabled]){transform:scale(.94)}
+.ball[disabled]{opacity:.22;filter:grayscale(.7);cursor:not-allowed}
+.ball.sm{width:40px;max-width:40px;flex:none;font-size:1rem}
+.ball.xs{width:22px;max-width:22px;flex:none;font-size:.7rem;box-shadow:inset -2px -3px 5px #0006}
+.ball.pick{outline:3px solid var(--brass);outline-offset:2px}
+.c-red{--c:#c4262e}.c-yellow{--c:#e6b92a;color:#161616}.c-green{--c:#1b8a4b}.c-brown{--c:#7b4a26}
+.c-blue{--c:#2562c8}.c-pink{--c:#ee8fab;color:#161616}.c-black{--c:#1a1b1d;border-color:#8a8f8c}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:30px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border-radius:20px;padding:2px 9px 2px 3px;font-family:var(--f-num);font-weight:600;font-size:1rem}
+.freeRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface2);border-radius:10px;padding:8px 10px}
+.acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+details summary{cursor:pointer;font-weight:600;padding:8px 0}
+.more{display:flex;gap:8px;flex-wrap:wrap}
+
+/* sheets */
+.back{position:fixed;inset:0;background:#000a;z-index:20}
+.sheet{position:fixed;z-index:21;left:0;right:0;bottom:0;max-height:92%;overflow:auto;background:var(--surface);border-radius:16px 16px 0 0;
+  padding:16px max(16px,env(safe-area-inset-left,0px)) calc(16px + env(safe-area-inset-bottom,0px));border-top:3px solid var(--brass)}
+.sheet .in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.sheet h2{font-size:1.5rem;text-transform:uppercase}
+.opt{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 12px;min-height:44px;font-weight:500}
+.opt[aria-pressed=true]{background:var(--baize);color:var(--baize-ink);border-color:var(--baize)}
+.opt[disabled]{opacity:.35}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper b{font-family:var(--f-num);font-size:1.5rem;min-width:1.5ch;text-align:center}
+.pen{font-family:var(--f-num);font-size:1.7rem;font-weight:700;color:var(--bad)}
+.tg{display:flex;gap:10px;align-items:flex-start;padding:8px 0}
+.tg input{width:22px;height:22px;margin-top:2px;accent-color:var(--baize)}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface)}
+thead th{font-family:var(--f-num);font-size:1.05rem;letter-spacing:.05em;background:var(--surface2)}
+thead th:first-child{background:var(--surface2)}
+tr.grp td{font-family:var(--f-num);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-size:.8rem;background:var(--surface2)}
+tbody tr:last-child td{border-bottom:0}
+.li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.li:last-child{border-bottom:0}
+.hist{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.hist:last-child{border-bottom:0}
+.tag{font-family:var(--f-num);font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;padding:1px 7px;border-radius:5px;background:var(--brass-soft);color:var(--brass)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.win{font-family:var(--f-num);font-size:2.2rem;font-weight:700;text-transform:uppercase}
+.back.hi{z-index:30}.sheet.hi{z-index:31;border-top-color:var(--bad)}
+.rs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.rs li{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:var(--surface2);font-weight:500}
+.rs li.cur{outline:2px solid var(--brass)}
+.rs li.done{opacity:.5;text-decoration:line-through}
+.rs-main{display:flex;align-items:center;gap:14px;background:var(--brass-soft);border:1px solid var(--brass);border-radius:12px;padding:14px}
+.rs-main .ball{flex:none;width:56px;max-width:56px;font-size:1.3rem}
+.rs-main p{margin:0;font-size:1.1rem;font-weight:600}
+@media (max-width:420px){.pl .sc{font-size:3.6rem}.info .big{font-size:2rem}.ball{font-size:1.15rem}}
+@media (prefers-reduced-motion:no-preference){.ball{transition:transform .08s}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="top"><h1>Snooker Scorer</h1><div class="theme" id="theme" role="group" aria-label="Colour theme"></div><span class="sync" id="sync"></span></div>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div id="view"></div>
+</div>
+<div id="layer"></div>
+<div id="live" class="sr" aria-live="polite"></div>
+
+<script>
+//ENGINE-START
+const BALLS=['red','yellow','green','brown','blue','pink','black'];
+const COL=['yellow','green','brown','blue','pink','black'];
+const VAL={red:1,yellow:2,green:3,brown:4,blue:5,pink:6,black:7};
+const clone=o=>JSON.parse(JSON.stringify(o));
+function newStats(){return{pts:0,pots:{red:0,yellow:0,green:0,brown:0,blue:0,pink:0,black:0},freePots:0,visits:0,noPot:0,fouls:0,misses:0,foulPtsGiven:0,foulPtsRecv:0,hb:0,b30:0,b50:0,b100:0}}
+function newFrame(breaker){return{sc:[0,0],reds:15,cols:[true,true,true,true,true,true],phase:'red',ci:0,turn:breaker,free:false,over:false,winner:null,why:'',needToss:false,brk:[],missRun:[0,0],st:[newStats(),newStats()]}}
+function endFrame(S,w,why){S.over=true;S.winner=w;S.why=why}
+// Apply one potted ball. Returns an error string when the pot is not legal, otherwise null.
+function applyPot(S,e){
+  if(S.over||S.needToss)return'Frame is not in play';
+  const p=S.turn,st=S.st[p],b=e.b;let pts=0;
+  if(e.f){
+    if(!S.free||S.brk.length||b==='red'||!(S.phase==='red'||S.phase==='clear'))return'No free ball';
+    let fromRed=0;
+    if(S.phase==='clear'){const i=COL.indexOf(b);if(i<=S.ci)return'Free ball must be another ball on the table';pts=VAL[COL[S.ci]]}
+    else{pts=1;S.phase='colour';fromRed=1}
+    S.free=false;st.freePots++;
+    S.sc[p]+=pts;st.pts+=pts;S.brk.push({b,pts,f:true,r:fromRed});return null;
+  }
+  S.free=false;
+  if(S.phase==='red'){
+    if(b!=='red'||S.reds<=0)return'Red is on';
+    S.reds--;pts=1;S.phase='colour';
+  }else if(S.phase==='colour'){
+    if(b==='red'){
+      const last=S.brk[S.brk.length-1];
+      if(last&&((last.b==='red'&&!last.f)||(last.f&&last.r))&&S.reds>0){S.reds--;pts=1}else return'A colour is on';
+    }else{pts=VAL[b];if(S.reds>0)S.phase='red';else{S.phase='clear';S.ci=0}}
+  }else if(S.phase==='clear'){
+    if(b!==COL[S.ci])return COL[S.ci]+' is on';
+    pts=e.w?0:VAL[b]; // e.w: potted on the same shot as the free ball, so only one of the two scores
+    S.cols[S.ci]=false;S.ci++;
+  }else if(S.phase==='rsblack'){
+    if(b!=='black')return'Black is on';
+    pts=7;
+  }
+  S.sc[p]+=pts;st.pts+=pts;st.pots[b]++;S.brk.push({b,pts});
+  if(S.phase==='rsblack')endFrame(S,p,'respotted black');
+  else if(S.phase==='clear'&&S.ci>=6){
+    if(S.sc[0]===S.sc[1]){S.phase='rsblack';S.ci=5;S.cols=[false,false,false,false,false,true];S.needToss=true}
+    else endFrame(S,S.sc[0]>S.sc[1]?0:1,'final black');
+  }
+  return null;
+}
+function closeBreak(S){
+  const st=S.st[S.turn],t=S.brk.reduce((a,x)=>a+x.pts,0);
+  st.visits++;if(!S.brk.length)st.noPot++;
+  if(t>st.hb)st.hb=t;if(t>=30)st.b30++;if(t>=50)st.b50++;if(t>=100)st.b100++;
+  S.brk=[];
+}
+function fixPhase(S){
+  if(S.phase==='colour'||(S.phase==='red'&&S.reds<=0)){if(S.reds>0)S.phase='red';else{S.phase='clear';S.ci=0}}
+}
+function endVisit(S){
+  closeBreak(S);S.free=false;
+  if(S.over||S.needToss)return;
+  fixPhase(S);S.turn=1-S.turn;
+}
+function onBallValue(S){return S.phase==='red'?1:S.phase==='clear'?VAL[COL[S.ci]]:S.phase==='rsblack'?7:4}
+function foulValue(S,hit,potted,nom,fb,seven){
+  let on=onBallValue(S);
+  // Rule 11(d)(vi): a foul after potting a red and before a colour is nominated costs 7. Once a colour is called it is the ball on.
+  if(S.phase==='colour')on=nom?Math.max(4,VAL[nom]):7;
+  let v=Math.max(4,on);
+  const val=b=>(fb&&b===fb)?on:VAL[b]; // a nominated free ball counts as the ball on
+  if(hit)v=Math.max(v,val(hit));
+  for(const b of potted||[])v=Math.max(v,val(b));
+  if(S.phase==='colour'&&hit==='red')v=Math.max(v,7); // Rule 11(d)(iii): playing at reds in successive strokes
+  if(seven)v=Math.max(v,7); // Rule 11(d): other seven-point fouls
+  return v;
+}
+function lastBlackOnly(S){return S.phase==='rsblack'||(S.phase==='clear'&&S.ci===5)}
+function applyFoul(S,a){
+  for(const e of a.pots||[])applyPot(S,e);
+  if(S.over)return;
+  const hadFree=S.free;
+  const off=S.turn,opp=1-off,v=foulValue(S,a.hit,a.potted,a.nom,a.fb,a.type==='seven');
+  const replace=a.type==='miss'&&!!a.again&&!lastBlackOnly(S); // balls put back, offender plays the shot again
+  closeBreak(S);S.free=false;
+  S.sc[opp]+=v;S.st[opp].foulPtsRecv+=v;S.st[off].fouls++;S.st[off].foulPtsGiven+=v;
+  if(a.type==='miss')S.st[off].misses++;
+  if(S.phase==='rsblack'){endFrame(S,opp,'foul on respotted black');return}
+  if(S.phase==='clear'&&S.ci===5){ // only the black is left: the first foul ends the frame unless the scores are level
+    if(S.sc[opp]>S.sc[off])endFrame(S,opp,'foul on final black');
+    else if(S.sc[opp]===S.sc[off]){S.phase='rsblack';S.cols=[false,false,false,false,false,true];S.needToss=true}
+    else endFrame(S,off,'foul on final black');
+    return;
+  }
+  if(replace){
+    if(a.clear)S.missRun[off]++; // only misses with a clear view of a full ball count towards three
+    S.turn=off;S.free=hadFree;
+    if(S.missRun[off]>=3)endFrame(S,opp,'three misses in a row');
+    return;
+  }
+  const reds=(a.potted||[]).filter(b=>b==='red').length;
+  S.reds=Math.max(0,S.reds-reds);
+  fixPhase(S);
+  if(a.again)S.turn=off;
+  else{S.turn=opp;S.free=!!a.free}
+}
+function applyAction(S,a){
+  if(!(a.k==='foul'&&a.type==='miss'&&a.again))S.missRun=[0,0];
+  if(a.k==='turn'){for(const e of a.pots)applyPot(S,e);endVisit(S)}
+  else if(a.k==='foul')applyFoul(S,a);
+  else if(a.k==='toss'){S.turn=a.p;S.needToss=false}
+  else if(a.k==='concede'){for(const e of a.pots||[])applyPot(S,e);if(!S.over){if(S.brk.length)closeBreak(S);endFrame(S,1-a.p,'conceded')}}
+}
+function remaining(S){
+  if(S.over)return 0;
+  let r=0;
+  if(S.phase==='red')r=S.reds*8+27;
+  else if(S.phase==='colour')r=7+S.reds*8+27;
+  else if(S.phase==='rsblack')r=7;
+  else for(let i=S.ci;i<6;i++)r+=VAL[COL[i]];
+  if(S.free&&!S.brk.length){if(S.phase==='red')r+=8;else if(S.phase==='clear')r+=VAL[COL[S.ci]]}
+  return r;
+}
+function onTable(S,b){
+  if(b==='red')return S.reds>0;
+  if(S.phase==='clear'||S.phase==='rsblack')return S.cols[COL.indexOf(b)];
+  return true;
+}
+//ENGINE-END
+
+/* ---------- storage ---------- */
+// Unsent changes are remembered in D.pend (a revision counter per document), so a failed or interrupted
+// save is retried and a stale device never overwrites newer data from the account.
+const LS='snooker-scorer-v1';
+let D={players:[],matches:{},live:null,pend:{players:0,live:0,matches:{}}};
+const ui={tab:'match',setup:{a:'',b:'',best:3,breaker:0},foul:null,respot:null,redCount:1,liveId:null,sameShot:false,ro:false,wOk:true,lOk:false,hadSheet:false,liveText:'',arm:null,db:null,mode:'local'};
+try{const s=localStorage.getItem(LS);if(s)D=Object.assign(D,JSON.parse(s))}catch(e){}
+D.pend=D.pend||{players:0,live:0,matches:{}};D.pend.matches=D.pend.matches||{};
+const saveLocal=()=>{try{localStorage.setItem(LS,JSON.stringify(D))}catch(e){}};
+const sync={timer:null,busy:false,retry:null,resub:null};
+const hasPend=()=>!!(D.pend.players||D.pend.live||Object.keys(D.pend.matches).length);
+function dirty(k,id){
+  if(ui.ro){saveLocal();return}
+  if(k==='matches')D.pend.matches[id]=(D.pend.matches[id]||0)+1;else D.pend[k]=(D.pend[k]||0)+1;
+  saveLocal();
+  clearTimeout(sync.timer);sync.timer=setTimeout(flush,350);
+}
+async function flush(){
+  if(!ui.db||sync.busy)return;
+  sync.busy=true;let ok=true;
+  try{
+    let again=true;
+    while(again){
+      again=false;
+      const p=D.pend;
+      if(p.players){const r=p.players;await ui.db.doc('club/players').set({list:D.players});if(p.players===r)p.players=0;else again=true}
+      if(p.live){const r=p.live;await ui.db.doc('club/live').set({live:D.live||null});if(p.live===r)p.live=0;else again=true}
+      for(const id of Object.keys(p.matches)){
+        const r=p.matches[id],m=D.matches[id];
+        if(m)await ui.db.doc('matches/'+id).set(m);else await ui.db.doc('matches/'+id).delete();
+        if(p.matches[id]===r)delete p.matches[id];else again=true;
+      }
+    }
+    ui.wOk=true;saveLocal();
+  }catch(e){
+    ok=false;
+    if(fatal(e)){ui.ro=true;D.pend={players:0,live:0,matches:{}};saveLocal()} // not allowed to write: stop retrying, keep working on this device
+    else ui.wOk=false;
+  }
+  setMode();
+  sync.busy=false;
+  clearTimeout(sync.retry);
+  if(!ok&&!ui.ro)sync.retry=setTimeout(flush,15000);
+  else if(ok&&hasPend())sync.timer=setTimeout(flush,350);
+}
+const fatal=e=>!!e&&['invalid_argument','quota_exceeded','revoked','not_granted','capability_disabled','capability_removed'].includes(e.code);
+function setMode(){
+  const el=document.getElementById('sync');if(!el)return;
+  el.textContent=ui.ro?'Read-only here: changes are kept on this device only':!ui.db?'Saved on this device only':(ui.wOk&&ui.lOk)?'Saved to your account, shared across devices':'Saved on this device only, reconnecting';
+}
+function liveRank(x){if(!x)return -1;const m=D.matches[x.matchId];return(x.ended?1e6:0)+(m?m.frames.length*1000:0)+x.actions.length+x.pending.length}
+function mergeLive(r,l){
+  if(!r)return l;
+  if(!l){const m=D.matches[r.matchId];return m&&m.done?null:r}
+  if(r.matchId!==l.matchId)return r;
+  return liveRank(l)>=liveRank(r)?l:r;
+}
+// Before the first write, read the account and merge with unsent local changes, so an old device cannot wipe newer data.
+async function initialMerge(db){
+  try{
+    const [ps,ls,ms]=await Promise.all([db.doc('club/players').get(),db.doc('club/live').get(),db.collection('matches').get()]);
+    if(D.pend.players&&ps.exists){
+      const r=clone(ps.data().list||[]),ids=new Set(r.map(p=>p.id));
+      D.players=[...r,...D.players.filter(p=>!ids.has(p.id))];
+    }
+    for(const id of Object.keys(D.pend.matches)){
+      const d=ms.docs.find(x=>x.id===id);
+      if(d){const r=clone(d.data()),l=D.matches[id];if(l&&r.frames.length>l.frames.length){D.matches[id]=r;delete D.pend.matches[id]}}
+    }
+    if(D.pend.live&&ls.exists)D.live=mergeLive(clone(ls.data().live||null),D.live);
+    saveLocal();
+  }catch(e){if(fatal(e))ui.ro=true}
+}
+let unsubs=[],lTries=0;
+function subscribe(){
+  const db=ui.db;
+  unsubs.forEach(f=>{try{f()}catch(e){}});unsubs=[];
+  const err=()=>{ui.lOk=false;setMode();if(!sync.resub&&lTries++<5)sync.resub=setTimeout(()=>{sync.resub=null;subscribe()},5000*lTries)};
+  const ok=()=>{if(!ui.lOk){ui.lOk=true;setMode()}};
+  // Snapshot data is frozen, so it is cloned before the page edits it.
+  unsubs.push(db.doc('club/players').onSnapshot(s=>{
+    ok();if(ui.ro||D.pend.players)return;
+    if(!s.exists){if(D.players.length)dirty('players');return}
+    const l=clone(s.data().list||[]);
+    if(JSON.stringify(l)!==JSON.stringify(D.players)){D.players=l;saveLocal();render()}
+  },err));
+  unsubs.push(db.doc('club/live').onSnapshot(s=>{
+    ok();if(ui.ro||D.pend.live)return;
+    if(!s.exists){if(D.live)dirty('live');return}
+    const l=clone(s.data().live||null);
+    if(JSON.stringify(l)!==JSON.stringify(D.live)){D.live=l;saveLocal();render()}
+  },err));
+  unsubs.push(db.collection('matches').onSnapshot(q=>{
+    ok();if(ui.ro)return;
+    const o={};q.docs.forEach(d=>{o[d.id]=clone(d.data())});
+    for(const id of Object.keys(D.pend.matches)){if(D.matches[id])o[id]=D.matches[id];else delete o[id]}
+    if(JSON.stringify(o)!==JSON.stringify(D.matches)){D.matches=o;saveLocal();render()}
+  },err));
+}
+async function initDb(){
+  let db=null;
+  try{db=await claude.use('db')}catch(e){}
+  if(!db){setMode();return}
+  ui.db=db;ui.wOk=true;
+  await initialMerge(db);
+  subscribe();
+  setMode();render();
+  flush();
+}
+
+/* ---------- theme ---------- */
+let themePref='auto';
+try{themePref=localStorage.getItem('snooker-theme')||'auto'}catch(e){}
+function setTheme(t){
+  themePref=t;
+  try{localStorage.setItem('snooker-theme',t)}catch(e){}
+  if(t==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',t);
+  const el=document.getElementById('theme');
+  if(el)el.innerHTML=[['auto','Auto'],['light','Light'],['dark','Dark']].map(([k,n])=>`<button aria-pressed="${themePref===k}" data-act="theme" data-v="${k}">${n}</button>`).join('');
+}
+setTheme(themePref);
+/* ---------- helpers ---------- */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+const pname=id=>{const p=D.players.find(x=>x.id===id);return p?p.name:'Player'};
+const ball=(b,cls='',attrs='',label)=>`<button class="ball c-${b} ${cls}" ${attrs} aria-label="${b}">${label??VAL[b]}</button>`;
+const dot=b=>`<span class="ball xs c-${b}" style="display:inline-grid">${VAL[b]}</span>`;
+function curMatch(){return D.live?D.matches[D.live.matchId]:null}
+function frameState(){const S=newFrame(D.live.breaker);for(const a of D.live.actions)applyAction(S,a);return S}
+function preview(S){const P=clone(S);for(const e of D.live.pending){if(applyPot(P,e))break}return P}
+const wins=M=>{const w=[0,0];M.frames.forEach(f=>w[f.w]++);return w};
+const need=M=>M.bestOf>0?Math.ceil(M.bestOf/2):0;
+function commit(action){delete D.live.reUndo;ui.redCount=1;ui.sameShot=false;D.live.actions.push(action);D.live.pending=[];dirty('live');render()}
+function popBall(L){ // removes the last ball; reds entered together on one shot go together
+  const isRed=x=>x&&x.b==='red'&&!x.f;
+  if(isRed(L.pending[L.pending.length-1])){while(isRed(L.pending[L.pending.length-1]))L.pending.pop()}else L.pending.pop();
+}
+
+/* ---------- views ---------- */
+function renderTabs(){
+  const t=[['match','Match'],['stats','Stats'],['players','Players']];
+  $('tabs').innerHTML=t.map(([k,n])=>`<button role="tab" aria-selected="${ui.tab===k}" data-act="tab" data-v="${k}">${n}</button>`).join('');
+}
+function viewSetup(){
+  const pl=D.players,s=ui.setup;
+  if(pl.length<2)return`<div class="card stack"><h2>New match</h2><p class="muted" style="margin:0">Add at least two players first.</p><button class="btn primary" data-act="tab" data-v="players">Add players</button></div>`;
+  if(!pl.find(p=>p.id===s.a))s.a=pl[0].id;
+  if(!pl.find(p=>p.id===s.b)||s.b===s.a)s.b=(pl.find(p=>p.id!==s.a)||pl[1]).id;
+  const opts=sel=>pl.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.name)}</option>`).join('');
+  const bests=[1,3,5,7,9,11,15,19,0];
+  return`<div class="card stack"><h2>New match</h2>
+  <label class="stack" style="gap:4px"><span class="lbl">Player 1</span><select id="selA" data-ch="a">${opts(s.a)}</select></label>
+  <label class="stack" style="gap:4px"><span class="lbl">Player 2</span><select id="selB" data-ch="b">${opts(s.b)}</select></label>
+  <label class="stack" style="gap:4px"><span class="lbl">Match length</span><select id="selBest" data-ch="best">${bests.map(n=>`<option value="${n}" ${s.best===n?'selected':''}>${n?'Best of '+n+' frames':'Open, no frame limit'}</option>`).join('')}</select></label>
+  <label class="stack" style="gap:4px"><span class="lbl">Breaks first</span><select id="selBr" data-ch="breaker"><option value="0" ${s.breaker==0?'selected':''}>${esc(pname(s.a))}</option><option value="1" ${s.breaker==1?'selected':''}>${esc(pname(s.b))}</option></select></label>
+  <button class="btn primary" data-act="start" ${s.a===s.b?'disabled':''}>Start match</button></div>`;
+}
+function viewEnded(M){
+  const w=wins(M),win=w[0]>w[1]?0:1;
+  return`<div class="card stack"><span class="lbl">Match finished</span><div class="win">${esc(M.names[win])} wins ${w[win]}–${w[1-win]}</div>
+  <div class="muted">${M.frames.map((f,i)=>`Frame ${i+1}: ${f.s[0]}–${f.s[1]}`).join(' · ')}</div>
+  <div class="row"><button class="btn primary grow" data-act="closematch">New match</button><button class="btn grow" data-act="undo">Undo last frame</button></div></div>`;
+}
+function viewLive(){
+  const L=D.live,M=curMatch();
+  if(!M)return viewSetup();
+  if(L.ended)return viewEnded(M);
+  const S=frameState(),P=preview(S),w=wins(M),n=need(M);
+  const names=M.names;
+  // The player at the table may still have a free colour (or a free ball) that the opponent will not have.
+  const rem=remaining(P),gap=Math.abs(P.sc[0]-P.sc[1]);
+  const Q=clone(P);Q.free=false;Q.brk=[];fixPhase(Q);
+  const remO=remaining(Q),opp=1-P.turn,diff=!P.over&&!P.needToss&&remO!==rem;
+  const lead=P.sc[0]>=P.sc[1]?0:1;
+  const brkPts=P.brk.reduce((a,x)=>a+x.pts,0);
+  const pips=i=>n?`<span class="pips" aria-label="${w[i]} frames">${Array.from({length:n},(_,k)=>`<span class="pip ${k<w[i]?'on':''}"></span>`).join('')}</span>`:`<span>${w[i]} fr</span>`;
+  const card=i=>`<div class="pl ${P.turn===i&&!P.over?'turn':''}"><div class="nm"><span style="overflow:hidden;text-overflow:ellipsis">${esc(names[i])}</span>${P.turn===i&&!P.over&&!P.needToss?'<span class="turnflag">at table</span>':''}</div>
+    <div class="sc">${P.sc[i]}</div><div class="sub">${pips(i)}<span>${P.turn===i&&brkPts?'Break '+brkPts:'Best '+(S.st[i].hb||0)}</span></div></div>`;
+  const reds=Array.from({length:15},(_,k)=>`<span class="rd ${k<P.reds?'':'gone'}"></span>`).join('');
+  let alert='';
+  const trailAvail=(1-lead)===P.turn?rem:remO;
+  if(!P.over&&gap>trailAvail&&P.sc[0]+P.sc[1]>0)alert=`<div class="alert"><b>${esc(names[1-lead])}</b> needs snookers: the gap (${gap}) is more than the ${trailAvail} points ${esc(names[1-lead])} can still score.</div>`;
+  if(!P.over&&S.missRun&&S.missRun[S.turn]>=2)alert+=`<div class="alert"><b>${esc(names[S.turn])}</b> has missed twice in a row with a clear view. One more and the frame is lost.</div>`;
+  // ball pad
+  const can=b=>{if(b==='red'&&P.phase==='colour'){let i=P.brk.length-1;while(i>=0&&P.brk[i].b==='red'&&!P.brk[i].f)i--;if(!(i>=0&&P.brk[i].f&&P.brk[i].r))return false}const c=clone(P);return!applyPot(c,{b})};
+  const rc=Math.max(1,Math.min(ui.redCount,P.reds));
+  const lastRed=P.brk.length&&P.brk[P.brk.length-1].b==='red'&&!P.brk[P.brk.length-1].f;
+  ui.liveText=`${names[0]} ${P.sc[0]}, ${names[1]} ${P.sc[1]}. ${P.reds} reds left, ${rem===remO?rem+' points left':names[P.turn]+' can score up to '+rem+', '+names[1-P.turn]+' up to '+remO}.`;
+  let onTxt=P.over?'':P.phase==='red'?'Red':P.phase==='colour'?'Any colour':P.phase==='clear'?cap(COL[P.ci]):'Black (respotted)';
+  if(P.free&&!P.brk.length)onTxt+=' (free ball available)';
+  const lastE=P.brk[P.brk.length-1];
+  const hint=lastE&&lastE.f&&lastE.r?'Free ball scored as a red. If a red also went down on the same shot, tap Red: it scores 1 as well.':lastE&&lastE.f&&P.phase==='clear'?'Tap the ball on if it went down too. Tick the box below when it was the same shot.':P.phase==='colour'&&P.reds===0?'Last red is down. Colour is on, then yellow to black.':P.phase==='colour'?'A colour is on. Red is not allowed until a colour is potted.':'';
+  const redStep=P.phase==='red'&&P.reds>1?`<div class="row" style="margin-bottom:8px"><span class="lbl">Reds potted on this shot</span><div class="stepper"><button class="btn" data-act="rc" data-v="-1" aria-label="fewer reds" ${rc>1?'':'disabled'}>−</button><b>${rc}</b><button class="btn" data-act="rc" data-v="1" aria-label="more reds" ${rc<P.reds?'':'disabled'}>+</button></div></div>`:'';
+  let freeRow='';
+  if(P.free&&!P.brk.length&&!P.over&&!lastBlackOnly(P)){
+    const fb=COL.filter((b,i)=>P.phase==='red'||i>P.ci);
+    freeRow=`<div class="freeRow"><span class="lbl">Free ball potted</span>${fb.map(b=>ball(b,'sm',`data-act="free" data-v="${b}"`)).join('')}</div>`;
+  }
+  const chips=L.pending.map(e=>{const pts=P.brk[L.pending.indexOf(e)]?.pts??0;return`<span class="chip">${dot(e.b)}${e.f?'free ':''}+${pts}</span>`}).join('');
+  let pad='';
+  if(P.needToss){
+    pad=`<div class="card stack"><h3>Scores are level on the last black</h3><p class="muted" style="margin:0">The black is respotted. Whoever wins the toss chooses who plays it. Who plays?</p><div class="row"><button class="btn primary grow" data-act="toss" data-v="0">${esc(names[0])}</button><button class="btn primary grow" data-act="toss" data-v="1">${esc(names[1])}</button></div><button class="btn" data-act="undo">Undo the last entry</button></div>`;
+  }else if(P.over&&!S.over){
+    pad=`<div class="card stack"><h3>${cap(P.why)}: ${esc(names[P.winner])} wins the frame</h3><div class="row"><button class="btn primary grow" data-act="turnend">Confirm</button><button class="btn grow" data-act="undo">Undo last ball</button></div></div>`;
+  }else if(!S.over){
+    pad=`<div class="onrow"><span class="lbl">${esc(names[P.turn])} is on</span><b>${onTxt}</b></div>
+    ${redStep}<div class="pad">${BALLS.map(b=>ball(b,b==='yellow'||b==='pink'?'':'',`data-act="pot" data-v="${b}" ${can(b)?'':'disabled'}`)).join('')}</div>
+    ${hint?`<p class="muted" style="margin:8px 0 0;font-size:.9rem">${hint}</p>`:''}
+    ${lastE&&lastE.f&&P.phase==='clear'?`<label class="tg"><input type="checkbox" data-ck2="same" ${ui.sameShot?'checked':''}><span>The ball on went down on the same shot as the free ball, so it scores nothing extra.</span></label>`:''}
+    <div class="chips" style="margin-top:10px">${chips||'<span class="muted" style="font-size:.9rem">Tap the balls potted this turn, in order.</span>'}</div>
+    ${freeRow?`<div style="margin-top:8px">${freeRow}</div>`:''}
+    <div class="acts" style="margin-top:10px"><button class="btn primary" data-act="turnend">${L.pending.length?'End turn':'Miss / safety'}</button><button class="btn warn" data-act="foulopen">Foul</button><button class="btn" data-act="undo" ${L.pending.length||L.actions.length||L.lastActions||L.reUndo?'':'disabled'}>Undo</button></div>`;
+  }
+  const arm=a=>ui.arm===a;
+  const more=`<details style="margin-top:6px"><summary>More</summary><div class="more">
+    <button class="btn ${arm('concede0')?'armed':''}" data-act="concede" data-v="0">${arm('concede0')?'Tap again':esc(names[0])+' concedes'}</button>
+    <button class="btn ${arm('concede1')?'armed':''}" data-act="concede" data-v="1">${arm('concede1')?'Tap again':esc(names[1])+' concedes'}</button>
+    <button class="btn ${arm('rerack')?'armed':''}" data-act="rerack">${arm('rerack')?'Tap again to restart':'Re-rack frame'}</button>
+    <button class="btn warn ${arm('endmatch')?'armed':''}" data-act="endmatch">${arm('endmatch')?'Tap again to end':'End match'}</button></div></details>`;
+  let overlay='';
+  if(S.over){
+    const fin=n&&(w[S.winner]+1>=n);
+    overlay=`<div class="back"></div><div class="sheet" role="dialog" aria-modal="true" aria-label="Frame result"><div class="in"><span class="lbl">Frame ${M.frames.length+1} · ${esc(S.why)}</span>
+      <div class="win">${esc(names[S.winner])} wins ${S.sc[S.winner]}–${S.sc[1-S.winner]}</div>
+      <div class="muted">Highest breaks: ${esc(names[0])} ${S.st[0].hb}, ${esc(names[1])} ${S.st[1].hb}</div>
+      <div class="row"><button class="btn primary grow" data-act="nextframe">${fin?'Finish match':'Next frame'}</button><button class="btn grow" data-act="undo">Undo last action</button></div></div></div>`;
+  }
+  const bo=M.bestOf?`Best of ${M.bestOf}`:'Open match';
+  return`<div class="lbl" style="margin-bottom:6px">Frame ${M.frames.length+1} · ${bo}</div>
+  <div class="board">${card(0)}${card(1)}</div>
+  <div class="info">
+    <div class="cell"><div class="lbl">Reds on table</div><div class="big">${P.reds}</div><div class="reddots">${reds}</div></div>
+    <div class="cell"><div class="lbl">Points left</div>${diff?`<div class="big">${rem}<span class="muted" style="font-size:1rem"> / ${remO}</span></div><div class="muted" style="font-size:.78rem">${esc(names[P.turn])} ${rem} · ${esc(names[opp])} ${remO}</div>`:`<div class="big">${rem}</div><div class="muted" style="font-size:.78rem">most you can still score</div>`}</div>
+    <div class="cell"><div class="lbl">${P.sc[0]===P.sc[1]?'Level':'Lead'}</div><div class="big">${gap}</div><div class="muted" style="font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${P.sc[0]===P.sc[1]?'&nbsp;':esc(names[lead])}</div></div>
+  </div>${alert}
+  ${pad}${more}${overlay}`;
+}
+function foulSheet(){
+  const f=ui.foul;if(!f)return'';
+  const L=D.live,M=curMatch(),S=frameState(),P=preview(S);
+  const off=P.turn,opp=1-off,names=M.names;
+  const potted=[...Array(f.reds).fill('red'),...COL.filter(b=>f.cols[b])];
+  const colourOn=P.phase==='colour';
+  const fbOn=P.free&&!P.brk.length&&!P.over&&!lastBlackOnly(P);
+  const noFree=lastBlackOnly(P);
+  const v=foulValue(P,f.hit,potted,colourOn?f.nom:null,fbOn?f.fb:null,f.type==='seven');
+  const types=[['wrong','Wrong ball hit first'],['inoff','White potted (in-off)'],['miss','Miss: no good attempt at the ball on'],['other','Other foul'],['seven','Seven-point foul (measuring, ball off the table, not declaring the ball on)']];
+  const hits=BALLS.filter(b=>onTable(P,b));
+  const selCols=COL.filter(b=>onTable(P,b));
+  const fbOpts=COL.filter((b,i)=>P.phase==='red'||i>P.ci);
+  const replace=f.type==='miss';
+  const nomRow=colourOn?`<div><div class="lbl">Colour called (the ball on)</div><div class="row" style="margin-top:6px"><button class="opt" aria-pressed="${!f.nom}" data-act="fnom" data-v="">Not called (7)</button>${COL.map(b=>`<button class="opt" aria-pressed="${f.nom===b}" data-act="fnom" data-v="${b}">${cap(b)} (${VAL[b]})</button>`).join('')}</div></div>`:'';
+  const fbRow=fbOn?`<div><div class="lbl">Free ball nominated</div><div class="row" style="margin-top:6px"><button class="opt" aria-pressed="${!f.fb}" data-act="ffb" data-v="">None</button>${fbOpts.map(b=>`<button class="opt" aria-pressed="${f.fb===b}" data-act="ffb" data-v="${b}">${cap(b)}</button>`).join('')}</div><div class="muted" style="font-size:.85rem;margin-top:4px">A nominated free ball counts as the ball on, so it is not valued as a colour.</div></div>`:'';
+  return`<div class="back" data-act="foulclose"></div><div class="sheet" role="dialog" aria-modal="true" aria-label="Foul"><div class="in">
+   <h2>Foul by ${esc(names[off])}</h2>
+   <div><div class="lbl">What happened</div><div class="row" style="margin-top:6px">${types.map(([k,n])=>`<button class="opt" aria-pressed="${f.type===k}" data-act="ftype" data-v="${k}">${n}</button>`).join('')}</div></div>
+   ${nomRow}${fbRow}
+   <div><div class="lbl">First ball hit</div><div class="row" style="margin-top:6px"><button class="opt" aria-pressed="${f.hit===null}" data-act="fhit" data-v="">No ball</button>${hits.map(b=>`<button class="opt" aria-pressed="${f.hit===b}" data-act="fhit" data-v="${b}">${cap(b)}</button>`).join('')}</div></div>
+   <div><div class="lbl">Potted on the foul stroke (not scored)</div>
+     <div class="row" style="margin-top:6px;gap:14px">
+       <div class="stepper">${dot('red')}<button class="btn" data-act="fred" data-v="-1" aria-label="fewer reds" ${f.reds?'':'disabled'}>−</button><b>${f.reds}</b><button class="btn" data-act="fred" data-v="1" aria-label="more reds" ${f.reds<P.reds?'':'disabled'}>+</button></div>
+       <div class="row" style="gap:8px">${selCols.map(b=>ball(b,'sm '+(f.cols[b]?'pick':''),`data-act="fcol" data-v="${b}" aria-pressed="${!!f.cols[b]}"`)).join('')}</div></div>
+     <div class="muted" style="font-size:.85rem;margin-top:4px">Reds potted in a foul stay down. Colours go back on their spots. If you tapped a ball that was potted on the foul stroke itself, close this sheet, remove it with Undo, and tick it here instead.</div></div>
+   <label class="tg"><input type="checkbox" data-ck="free" ${f.free&&!noFree&&!f.again?'checked':''} ${f.again||noFree?'disabled':''}><span><b>Free ball</b><br><span class="muted">${noFree?'Not possible, only the black is left.':`${esc(names[opp])} is snookered after the foul and gets a free ball.`}</span></span></label>
+   ${noFree?'':`<label class="tg"><input type="checkbox" data-ck="again" ${f.again?'checked':''}><span><b>${replace?'Replace the balls, play again':'Play again'}</b><br><span class="muted">${replace?`${esc(names[opp])} makes ${esc(names[off])} replay the shot from the original positions. Reds potted on the stroke go back. Three misses in a row with a clear view lose the frame.`:`${esc(names[opp])} makes ${esc(names[off])} play the next shot.`}</span></span></label>`}
+   ${replace&&f.again&&!noFree?`<label class="tg"><input type="checkbox" data-ck="clear" ${f.clear?'checked':''}><span><b>Clear view of a full ball</b><br><span class="muted">Only misses where the player could see a full ball count towards the three-miss rule.</span></span></label>`:''}
+   <div class="pen">${v} points to ${esc(names[opp])}</div>
+   <div class="muted" style="font-size:.85rem">The penalty is the highest of 4, the ball on, the ball hit first and any ball potted. After a red, the ball on is the colour called, and a foul with no colour called is 7. Hitting a red straight after a red is also 7.${L.pending.length?' Balls already tapped this turn are scored before the foul.':''}</div>
+   <div class="row"><button class="btn primary grow" data-act="foulok">Apply foul</button><button class="btn grow" data-act="foulclose">Cancel</button></div>
+  </div></div>`;
+}
+/* ---------- respot ---------- */
+// A: the frame state after the pot or foul. batch: colours that must go back on the table.
+// undo: 'ball' (undo the last tapped ball), 'foul' (undo the foul) or false.
+function startRespot(batch,A,undo){
+  if(!batch.length||A.over)return;
+  const balls=[...new Set(batch)].sort((x,y)=>VAL[y]-VAL[x]);
+  ui.respot={balls,i:0,taken:[],placed:{},undo:undo||false};
+}
+// Own spot first. If it is taken, every other spot in turn, highest value first (the page cannot know which are free).
+// Spots already marked as taken, or filled by an earlier ball in this batch, are skipped.
+function respotOffer(R){
+  const b=R.balls[R.i],placed=Object.values(R.placed).filter(Boolean);
+  if(!R.taken.includes(b)&&!placed.includes(b))return{spot:b,own:true};
+  const occ=new Set([...R.taken,...placed]);
+  for(let k=COL.length-1;k>=0;k--){if(COL[k]!==b&&!occ.has(COL[k]))return{spot:COL[k]}}
+  return{close:true};
+}
+function respotSheet(){
+  const R=ui.respot;if(!R)return'';
+  const n=R.balls.length,b=R.balls[R.i],o=respotOffer(R),B=cap(b);
+  const head=n>1?`Respot ${n} balls`:`Respot the ${b}`;
+  const list=n>1?`<div class="muted" style="font-size:.9rem">Highest value first. Ball ${R.i+1} of ${n}.</div><ul class="rs">${R.balls.map((x,k)=>`<li class="${k<R.i?'done':k===R.i?'cur':''}">${dot(x)} ${cap(x)}${k<R.i?' placed':''}</li>`).join('')}</ul>`:'';
+  let msg,btns;
+  if(o.close){
+    msg=`Every spot is taken. Place the ${b} as close as possible to the ${b} spot, between that spot and the top cushion. If there is no room there, place it on the centre line as close as possible below the spot.`;
+    btns=`<button class="btn primary grow" data-act="rs-ok">Placed</button>`;
+  }else{
+    msg=o.own?`Place the ${B} on the ${b} spot.`:`The ${b} spot is taken. Place the ${b} on the ${o.spot} spot, the next highest spot.`;
+    btns=`<button class="btn primary grow" data-act="rs-ok">Placed on the ${o.spot} spot</button><button class="btn grow" data-act="rs-taken">${cap(o.spot)} spot is taken</button>`;
+  }
+  return`<div class="back hi"></div><div class="sheet hi" role="alertdialog" aria-modal="true" aria-label="${head}"><div class="in">
+   <h2>${head}</h2>${list}
+   <div class="rs-main">${ball(b,'',' disabled style="opacity:1;filter:none"')}<p>${msg}</p></div>
+   <div class="row">${btns}</div>
+   ${R.undo&&R.i===0?`<button class="btn" data-act="rs-undo">${R.undo==='foul'?'Wrong foul, undo it':'Wrong ball, undo it'}</button>`:''}
+  </div></div>`;
+}
+function aggregate(){
+  const out={};
+  const blank=p=>({name:p.name,matches:0,mw:0,frames:0,fw:0,pts:0,hb:0,b30:0,b50:0,b100:0,pots:0,visits:0,byc:{red:0,yellow:0,green:0,brown:0,blue:0,pink:0,black:0},free:0,fouls:0,fpg:0,fpr:0,noPot:0});
+  D.players.forEach(p=>out[p.id]=blank(p));
+  Object.values(D.matches).forEach(m=>{
+    const w=wins(m);
+    [0,1].forEach(i=>{
+      const o=out[m.p[i]];if(!o)return;
+      if(m.frames.length)o.matches++;
+      if(m.done&&w[i]>w[1-i])o.mw++;
+      m.frames.forEach(f=>{
+        const s=f.st[i];o.frames++;if(f.w===i)o.fw++;
+        o.pts+=s.pts;o.hb=Math.max(o.hb,s.hb);o.b30+=s.b30;o.b50+=s.b50;o.b100+=s.b100;o.visits+=s.visits;o.noPot+=s.noPot;
+        o.free+=s.freePots;o.fouls+=s.fouls;o.fpg+=s.foulPtsGiven;o.fpr+=s.foulPtsRecv;
+        for(const b of BALLS){o.byc[b]+=s.pots[b];o.pots+=s.pots[b]}
+        o.pots+=s.freePots;
+      });
+    });
+  });
+  return out;
+}
+function viewStats(){
+  const A=aggregate(),ps=D.players.filter(p=>A[p.id].frames>0);
+  const hist=Object.values(D.matches).sort((a,b)=>b.date-a.date);
+  let tbl='<div class="card muted">No frames recorded yet. Finish a frame and the stats appear here.</div>';
+  if(ps.length){
+    const f=(x,d=1)=>Number.isInteger(x)?x:x.toFixed(d);
+    const rows=[
+      ['g','Results'],
+      ['Matches played',o=>o.matches],['Matches won',o=>o.mw],['Frames played',o=>o.frames],['Frames won',o=>o.fw],
+      ['Frame win %',o=>o.frames?Math.round(o.fw/o.frames*100)+'%':'-'],
+      ['g','Scoring'],
+      ['Points from balls',o=>o.pts],['Average per frame',o=>o.frames?f(o.pts/o.frames):'-'],['Highest break',o=>o.hb],
+      ['Breaks 30+',o=>o.b30],['Breaks 50+',o=>o.b50],['Breaks 100+',o=>o.b100],
+      ['Balls potted',o=>o.pots],['Pots per turn',o=>o.visits?f(o.pots/o.visits,2):'-'],['Turns with no pot',o=>o.noPot],
+      ['g','Balls potted'],
+      ...BALLS.map(b=>[cap(b),o=>o.byc[b]]),['Free balls',o=>o.free],
+      ['g','Fouls'],
+      ['Fouls committed',o=>o.fouls],['Foul points given away',o=>o.fpg],['Foul points received',o=>o.fpr]
+    ];
+    tbl=`<div class="tw"><table><thead><tr><th></th>${ps.map(p=>`<th>${esc(p.name)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>r[0]==='g'?`<tr class="grp"><td colspan="${ps.length+1}">${r[1]}</td>`+'</tr>':`<tr><td>${r[0]}</td>${ps.map(p=>`<td>${r[1](A[p.id])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+  const h=hist.length?hist.map(m=>{
+    const w=wins(m),d=new Date(m.date).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+    const armed=ui.arm==='del'+m.id;
+    return`<div class="hist"><div style="min-width:0"><b>${esc(m.names[0])}</b> ${w[0]}–${w[1]} <b>${esc(m.names[1])}</b><div class="muted" style="font-size:.85rem">${d} · ${m.frames.map(f=>f.s[0]+'-'+f.s[1]).join(', ')||'no frames'} ${m.done?'':'<span class="tag">in progress</span>'}</div></div>
+      <button class="btn ${armed?'armed':''}" data-act="delmatch" data-v="${m.id}">${armed?'Tap again':'Delete'}</button></div>`}).join(''):'<div class="muted">No matches yet.</div>';
+  return`<div class="stack"><h2>Player stats</h2>${tbl}<h2>Matches</h2><div class="card">${h}</div></div>`;
+}
+function viewPlayers(){
+  const list=D.players.length?D.players.map(p=>{const armed=ui.arm==='rm'+p.id;return`<div class="li"><span>${esc(p.name)}</span><button class="btn ${armed?'armed':''}" data-act="rmplayer" data-v="${p.id}">${armed?'Tap again':'Remove'}</button></div>`}).join(''):'<div class="muted">Nobody yet. Add the people who play on your table.</div>';
+  return`<div class="stack"><h2>Players</h2>
+  <form id="addForm" class="row" style="flex-wrap:nowrap"><input type="text" id="newName" placeholder="Player name" maxlength="30" autocomplete="off" aria-label="Player name"><button class="btn primary" type="submit">Add</button></form>
+  <div class="card">${list}</div>
+  <p class="muted" style="margin:0;font-size:.9rem">Removing a player keeps finished matches in the history but drops them from the stats table.</p></div>`;
+}
+function render(){
+  if(!D.live||(ui.liveId&&D.live.matchId!==ui.liveId)){ui.foul=null;ui.respot=null}
+  ui.liveId=D.live?D.live.matchId:null;
+  const ae=document.activeElement;
+  const keep=ae&&ae.dataset&&ae.dataset.act?{a:ae.dataset.act,v:ae.dataset.v}:null;
+  renderTabs();
+  const v=$('view');
+  const focusId=ae&&ae.id;
+  ui.liveText='';
+  if(ui.tab==='match')v.innerHTML=D.live&&curMatch()?viewLive():viewSetup();
+  else if(ui.tab==='stats')v.innerHTML=viewStats();
+  else v.innerHTML=viewPlayers();
+  $('layer').innerHTML=(ui.foul&&D.live?foulSheet():'')+(ui.respot&&D.live&&ui.tab==='match'?respotSheet():'');
+  $('live').textContent=ui.liveText;
+  if(focusId==='newName'&&$('newName'))$('newName').focus();
+  if(document.querySelector){
+    const sels=document.querySelectorAll?document.querySelectorAll('#layer .sheet'):[];
+    const sh=sels.length?sels[sels.length-1]:null;
+    const find=root=>keep?root.querySelector('[data-act="'+keep.a+'"]'+(keep.v!=null?'[data-v="'+keep.v+'"]':'')):null;
+    if(sh){const n=find(sh)||(!ui.hadSheet?sh.querySelector('button'):null);if(n)n.focus()}
+    else if(keep){const n=find(document);if(n)n.focus()}
+    ui.hadSheet=!!sh;
+  }
+}
+
+/* ---------- events ---------- */
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&ui.foul&&!ui.respot){ui.foul=null;render()}});
+document.addEventListener('click',ev=>{
+  const t=ev.target.closest('[data-act]');if(!t)return;
+  const a=t.dataset.act,v=t.dataset.v,L=D.live;
+  const liveOnly=['pot','free','turnend','undo','toss','foulopen','foulok','concede','rerack','endmatch','nextframe','rs-ok','rs-taken','rs-undo','rc','closematch'];
+  if(liveOnly.includes(a)&&!L)return;
+  if(['ftype','fhit','fred','fcol','fnom','ffb','foulok'].includes(a)&&!ui.foul)return;
+  if(['rs-ok','rs-taken','rs-undo'].includes(a)&&!ui.respot)return;
+  const keepArm=['concede','rerack','endmatch','delmatch','rmplayer'].includes(a);
+  if(!keepArm)ui.arm=null;
+  const twice=key=>{if(ui.arm===key){ui.arm=null;return true}ui.arm=key;render();return false};
+  switch(a){
+    case 'theme':setTheme(v);break;
+    case 'rc':ui.redCount=Math.max(1,Math.min(ui.redCount+ +v,Math.max(1,preview(frameState()).reds)));render();break;
+    case 'tab':ui.tab=v;ui.foul=null;render();break;
+    case 'start':{
+      const s=ui.setup,id=uid();
+      D.matches[id]={id,date:Date.now(),p:[s.a,s.b],names:[pname(s.a),pname(s.b)],bestOf:s.best,frames:[],done:false,breaker:s.breaker};
+      D.live={matchId:id,breaker:s.breaker,actions:[],pending:[]};
+      dirty('matches',id);dirty('live');render();break}
+    case 'pot':{
+      const P0=preview(frameState());
+      if(v==='red'){
+        const n=P0.phase==='red'?Math.max(1,Math.min(ui.redCount,P0.reds)):1;
+        for(let i=0;i<n;i++)L.pending.push({b:'red'});
+        ui.redCount=1;dirty('live');render();break}
+      const last=L.pending[L.pending.length-1],e={b:v};
+      if(P0.phase==='clear'&&last&&last.f)e.w=ui.sameShot?1:0;
+      ui.sameShot=false;
+      const A=clone(P0),err=applyPot(A,e);
+      L.pending.push(e);dirty('live');
+      const batch=P0.phase==='colour'&&v!=='red'?[v]:(!err&&A.needToss&&!P0.needToss?['black']:[]);
+      startRespot(batch,A,'ball');render();break}
+    case 'free':{
+      const A=clone(preview(frameState()));applyPot(A,{b:v,f:true});
+      L.pending.push({b:v,f:true});dirty('live');startRespot([v],A,'ball');render();break}
+    case 'rs-ok':{const R=ui.respot,o=respotOffer(R);R.placed[R.balls[R.i]]=o.spot||'';R.i++;if(R.i>=R.balls.length)ui.respot=null;render();break}
+    case 'rs-taken':{const R=ui.respot;R.taken.push(respotOffer(R).spot);render();break}
+    case 'rs-undo':{
+      const k=ui.respot&&ui.respot.undo;ui.respot=null;
+      if(k==='foul'){const x=L.actions.pop();if(x&&x.pots)L.pending=x.pots.slice()}else popBall(L);
+      dirty('live');render();break}
+    case 'turnend':commit({k:'turn',pots:L.pending.slice()});break;
+    case 'undo':{
+      ui.sameShot=false;
+      if(L.pending.length)popBall(L);
+      else if(L.actions.length){const x=L.actions.pop();if(x.pots&&x.pots.length)L.pending=x.pots.slice()}
+      else if(L.reUndo){L.actions=L.reUndo;delete L.reUndo}
+      else if(L.lastActions){
+        const M=curMatch();
+        if(M){M.frames.pop();M.done=false;dirty('matches',M.id)}
+        L.ended=false;L.actions=L.lastActions;L.breaker=L.lastBreaker;delete L.lastActions;delete L.lastBreaker;
+      }
+      dirty('live');render();break}
+    case 'toss':if(L.pending.length)L.actions.push({k:'turn',pots:L.pending.slice()});L.pending=[];commit({k:'toss',p:+v});break;
+    case 'foulopen':ui.foul={type:'wrong',hit:null,nom:null,fb:null,reds:0,cols:{},free:false,again:false,clear:false};render();break;
+    case 'foulclose':ui.foul=null;render();break;
+    case 'ftype':ui.foul.type=v;render();break;
+    case 'fhit':ui.foul.hit=v||null;render();break;
+    case 'fnom':ui.foul.nom=v||null;render();break;
+    case 'ffb':ui.foul.fb=v||null;render();break;
+    case 'fred':ui.foul.reds=Math.max(0,ui.foul.reds+ +v);render();break;
+    case 'fcol':ui.foul.cols[v]=!ui.foul.cols[v];render();break;
+    case 'foulok':{
+      const f=ui.foul,P0=preview(frameState());
+      const potted=[...Array(f.reds).fill('red'),...COL.filter(b=>f.cols[b])];
+      const nom=P0.phase==='colour'?f.nom:null;
+      const fb=(P0.free&&!P0.brk.length&&!lastBlackOnly(P0))?f.fb:null;
+      ui.foul=null;
+      commit({k:'foul',pots:L.pending.slice(),hit:f.hit,potted,type:f.type,free:f.free,again:f.again,clear:f.clear,nom,fb});
+      const S2=frameState();
+      const replaced=f.type==='miss'&&f.again&&!lastBlackOnly(P0);
+      const batch=replaced?[]:potted.filter(b=>b!=='red');
+      if(S2.needToss&&!batch.includes('black'))batch.push('black');
+      startRespot(batch,S2,'foul');render();break}
+    case 'concede':
+      if(twice('concede'+v))commit({k:'concede',p:+v,pots:L.pending.slice()});
+      break;
+    case 'rerack':if(twice('rerack')){L.reUndo=L.actions.slice();L.actions=[];L.pending=[];dirty('live');render()}break;
+    case 'endmatch':if(twice('endmatch')){const M=curMatch();if(M){M.done=true;dirty('matches',M.id)}D.live=null;dirty('live');render()}break;
+    case 'closematch':D.live=null;dirty('live');render();break;
+    case 'nextframe':{
+      const M=curMatch(),S=frameState();
+      L.lastActions=L.actions.slice();L.lastBreaker=L.breaker;delete L.reUndo;
+      M.frames.push({s:S.sc.slice(),w:S.winner,why:S.why,st:S.st});
+      const w=wins(M),n=need(M);
+      if(n&&(w[0]>=n||w[1]>=n)){M.done=true;L.ended=true;L.actions=[];L.pending=[]}
+      else{L.breaker=(M.breaker+M.frames.length)%2;L.actions=[];L.pending=[]}
+      dirty('matches',M.id);dirty('live');render();break}
+    case 'delmatch':if(twice('del'+v)){delete D.matches[v];if(D.live&&D.live.matchId===v){D.live=null;dirty('live')}dirty('matches',v);render()}break;
+    case 'rmplayer':if(twice('rm'+v)){D.players=D.players.filter(p=>p.id!==v);dirty('players');render()}break;
+  }
+});
+document.addEventListener('change',ev=>{
+  const t=ev.target;
+  if(t.dataset.ch){
+    const k=t.dataset.ch;ui.setup[k]=k==='a'||k==='b'?t.value:+t.value;
+    if(k==='a'&&ui.setup.b===t.value)ui.setup.b='';
+    if(k==='b'&&ui.setup.a===t.value)ui.setup.a='';
+    render();
+  }else if(t.dataset.ck2==='same'){
+    ui.sameShot=t.checked;render();
+  }else if(t.dataset.ck&&ui.foul){
+    ui.foul[t.dataset.ck]=t.checked;
+    if(t.dataset.ck==='again'&&t.checked)ui.foul.free=false;
+    if(t.dataset.ck==='free'&&t.checked)ui.foul.again=false;
+    render();
+  }
+});
+document.addEventListener('submit',ev=>{
+  if(ev.target.id!=='addForm')return;
+  ev.preventDefault();
+  const el=$('newName'),name=el.value.trim();
+  if(!name)return;
+  if(D.players.some(p=>p.name.toLowerCase()===name.toLowerCase())){el.value='';return}
+  D.players.push({id:uid(),name});dirty('players');render();$('newName').focus();
+});
+render();
+initDb();
+</script>
+</body>
+</html>

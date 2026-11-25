@@ -587,7 +587,7 @@ function respotSheet(){
 }
 function aggregate(){
   const out={};
-  const blank=p=>({name:p.name,matches:0,mw:0,frames:0,fw:0,pts:0,hb:0,b30:0,b50:0,b100:0,pots:0,visits:0,byc:{red:0,yellow:0,green:0,brown:0,blue:0,pink:0,black:0},free:0,fouls:0,fpg:0,fpr:0,noPot:0});
+  const blank=p=>({name:p.name,matches:0,mw:0,frames:0,fw:0,pts:0,hb:0,b30:0,b50:0,b100:0,pots:0,visits:0,byc:{red:0,yellow:0,green:0,brown:0,blue:0,pink:0,black:0},free:0,fouls:0,fpg:0,fpr:0,noPot:0,tfs:0});
   D.players.forEach(p=>out[p.id]=blank(p));
   Object.values(D.matches).forEach(m=>{
     const w=wins(m);
@@ -597,6 +597,7 @@ function aggregate(){
       if(m.done&&w[i]>w[1-i])o.mw++;
       m.frames.forEach(f=>{
         const s=f.st[i];o.frames++;if(f.w===i)o.fw++;
+        if(f.s)o.tfs=Math.max(o.tfs,f.s[i]||0);
         o.pts+=s.pts;o.hb=Math.max(o.hb,s.hb);o.b30+=s.b30;o.b50+=s.b50;o.b100+=s.b100;o.visits+=s.visits;o.noPot+=s.noPot;
         o.free+=s.freePots;o.fouls+=s.fouls;o.fpg+=s.foulPtsGiven;o.fpr+=s.foulPtsRecv;
         for(const b of BALLS){o.byc[b]+=s.pots[b];o.pots+=s.pots[b]}
@@ -617,7 +618,7 @@ function viewStats(){
       ['Matches played',o=>o.matches],['Matches won',o=>o.mw],['Frames played',o=>o.frames],['Frames won',o=>o.fw],
       ['Frame win %',o=>o.frames?Math.round(o.fw/o.frames*100)+'%':'-'],
       ['g','Scoring'],
-      ['Points from balls',o=>o.pts],['Average per frame',o=>o.frames?f(o.pts/o.frames):'-'],['Highest break',o=>o.hb],
+      ['Points from balls',o=>o.pts],['Average per frame',o=>o.frames?f(o.pts/o.frames):'-'],['Top frame score',o=>o.tfs],['Highest break',o=>o.hb],
       ['Breaks 30+',o=>o.b30],['Breaks 50+',o=>o.b50],['Breaks 100+',o=>o.b100],
       ['Balls potted',o=>o.pots],['Pots per turn',o=>o.visits?f(o.pots/o.visits,2):'-'],['Turns with no pot',o=>o.noPot],
       ['g','Balls potted'],

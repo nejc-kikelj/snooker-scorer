@@ -1,5 +1,5 @@
 # Test cases derived from the WPBSA Rules of Snooker (May 2022 edition), Section 3. Expected values come from the rule text.
-import json
+import json, sys
 from ui import new
 c=new()
 c.eval("D.players=[{id:'a',name:'Ann'},{id:'b',name:'Bob'}];render();")
@@ -94,3 +94,5 @@ bad=[r for r in res if not r[2]]
 for r in res:print(('PASS' if r[2] else 'FAIL'),r[0].ljust(14),r[1],('' if r[2] else ' -> '+r[3]))
 print(len(res)-len(bad),'passed,',len(bad),'failed')
 print('errs',c.eval("JSON.stringify(errs)"))
+errs=json.loads(c.eval("JSON.stringify(errs)"))
+sys.exit(1 if bad or errs else 0)

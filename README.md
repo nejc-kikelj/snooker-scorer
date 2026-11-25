@@ -34,3 +34,9 @@ The tests run the page's JavaScript in V8 (via `py-mini-racer`) with a minimal f
 ## Not covered
 
 Handicaps, four-handed play, six-reds snooker, stalemate timing, referee judgement calls (whether a foul happened, snookered or not), and two devices scoring the same frame at once (last write wins).
+
+## Licence
+
+Copyright (C) 2026 Nejc Kikelj
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It comes with no warranty. See [LICENSE](LICENSE) for the full text.
